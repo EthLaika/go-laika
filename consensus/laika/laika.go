@@ -35,6 +35,8 @@ var (
 	errInvalidDifficulty = errors.New("invalid difficulty")
 	// errHigherDifficultyFound is thrown if we received a block with higher difficulty until blocktime
 	errHigherDifficultyFound = errors.New("higher difficulty found")
+
+	errQuit = errors.New("received quit signal")
 )
 
 var (
@@ -51,15 +53,18 @@ type bestResult struct {
 
 // Laika is the proof-of-capacity consensus engine for the Ethereum Laika testnet.
 type Laika struct {
-	config      *params.LaikaConfig // Consensus engine configuration parameters
-	db          ethdb.Database      // Database to store and retrieve snapshot checkpoints
-	miningLock  sync.Mutex          // Ensures thread safety for the in-memory caches and mining fields
-	update      chan struct{}       // Notification channel to update mining parameters
-	hashrate    metrics.Meter       // Meter tracking the average hashrate
-	wg          sync.WaitGroup      // Waitgroup of verification threads waiting for the next blocktime
-	result      bestResult          // Best found result for this block period
-	resultGuard sync.RWMutex        // Guard protecting the access to the best Result
-	file        *PlotFile           // The plot file used for mining.
+	config      *params.LaikaConfig      // Consensus engine configuration parameters
+	db          ethdb.Database           // Database to store and retrieve snapshot checkpoints
+	miningLock  sync.Mutex               // Ensures thread safety for the in-memory caches and mining fields
+	update      chan struct{}            // Notification channel to update mining parameters
+	hashrate    metrics.Meter            // Meter tracking the average hashrate
+	wg          sync.WaitGroup           // Waitgroup of verification threads waiting for the next blocktime
+	result      bestResult               // Best found result for this block period
+	resultGuard sync.RWMutex             // Guard protecting the access to the best Result
+	file        *PlotFile                // The plot file used for mining.
+	newHeader   chan *types.Header       // communicates to the metronome a new header on which mining has started
+	veriSync    map[uint64]chan struct{} // synchronizes calls to VerifyHeader per block number
+	quit        chan struct{}            // quits running routines like metronome
 }
 
 // New creates a Laika proof-of-capacity consensus engine
@@ -71,11 +76,18 @@ func New(config *params.LaikaConfig, datasetDir string, db ethdb.Database) *Laik
 	if file == nil {
 		panic("could not open the plot file '" + datasetDir + "'")
 	}
-	return &Laika{
-		config: config,
-		db:     db,
-		file:   file,
+
+	engine := &Laika{
+		config:    config,
+		db:        db,
+		file:      file,
+		newHeader: make(chan *types.Header, 1),
+		veriSync:  make(map[uint64]chan struct{}),
+		quit:      make(chan struct{}),
 	}
+	go engine.metronome()
+
+	return engine
 }
 
 // Author implements consensus.Engine, returning the Ethereum address recovered
@@ -151,40 +163,44 @@ func (l *Laika) verifyHeaderWorker(chain consensus.ChainReader, headers []*types
 	defer l.wg.Done()
 
 	var parent *types.Header
+	header := headers[index]
 	if index == 0 {
 		parent = chain.GetHeader(headers[0].ParentHash, headers[0].Number.Uint64()-1)
-	} else if headers[index-1].Hash() == headers[index].ParentHash {
+	} else if headers[index-1].Hash() == header.ParentHash {
 		parent = headers[index-1]
 	}
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	if chain.GetHeader(headers[index].Hash(), headers[index].Number.Uint64()) != nil {
+	if chain.GetHeader(header.Hash(), header.Number.Uint64()) != nil {
 		return nil // known block
 	}
 
-	if l.verifyHeader(chain, headers[index], parent, false, seals[index]) != nil {
+	if l.verifyHeader(chain, header, parent, false, seals[index]) != nil {
 		return errInvalidPoC
 	}
 
-	difficulty := new(big.Int).SetBytes(headerHash(headers[index]))
+	// header passed the verification, we'll check it against all other current
+	// checks and wait
+	difficulty := new(big.Int).SetBytes(headerHash(header))
 
 	l.miningLock.Lock()
 	if l.result.difficulty == nil || difficulty.Cmp(l.result.difficulty) == -1 {
 		l.result.difficulty = difficulty
-		l.result.header = headers[index]
+		l.result.header = header
 	}
 	l.miningLock.Unlock()
 
-	// wait for next blocktime
-	blocktime := headers[index].Time + l.config.Period
-	timeToRest := uint64(time.Now().Unix()) - blocktime
-	timer := time.NewTimer(time.Duration(timeToRest) * time.Second)
-	defer timer.Stop()
-	_ = <-timer.C
+	blockNum := header.Number.Uint64()
+	log.Debug("[verifyHeaderWorker] waiting for tick, header #", blockNum)
+	select {
+	case <-l.veriSync[blockNum]:
+	case <-l.quit:
+		return errQuit
+	}
 
-	// Unlikely to receive two blocks with the same difficulty
-	if l.result.difficulty != difficulty {
+	// A better result was received in the meantime
+	if l.result.header.Hash() != header.Hash() {
 		return errHigherDifficultyFound
 	}
 
@@ -273,6 +289,8 @@ func (l *Laika) Prepare(chain consensus.ChainReader, header *types.Header) error
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
+
+	l.newHeader <- header
 	return nil
 }
 
@@ -335,5 +353,47 @@ func (l *Laika) Hashrate() uint64 {
 
 // Close implements consensus.Engine.
 func (l *Laika) Close() error {
+	close(l.quit)
+	close(l.newHeader) // Prepare() should not be called after a call to Close()
 	return nil
+}
+
+// The metronome is a go routine that sends
+func (l *Laika) metronome() {
+	// we start a ticker on the next full multiple of a period in this minute
+	tickerStart := nextFullMultiple(l.config.Period)
+	log.Debug("[metronome] Starting ticker on", tickerStart)
+	time.Sleep(time.Until(tickerStart))
+
+	ticker := time.NewTicker(time.Duration(l.config.Period) * time.Second)
+	defer ticker.Stop()
+
+	for h := range l.newHeader {
+		blockNum := h.Number.Uint64()
+		log.Debug("[metronome] Received new header #", blockNum)
+		l.veriSync[blockNum] = make(chan struct{})
+		select {
+		case <-ticker.C:
+			log.Debug("[metronome] Tick for header #", blockNum)
+		case <-l.quit:
+			return
+		}
+		// signal to all verifyHeaderWorkers that proof generation period is done
+		// for this block
+		close(l.veriSync[blockNum])
+		delete(l.veriSync, blockNum)
+	}
+}
+
+func nextFullMultiple(period uint64) time.Time {
+	now := time.Now()
+	if period < 60 && period%60 == 0 {
+		nowSec := now.Second()
+		fullSec := (uint64(nowSec) + period - 1) / period * period
+		return time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute(), int(fullSec), 0, now.Location())
+	} else if now.Second() == 0 {
+		return now
+	} else {
+		return time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), now.Minute()+1, 0, 0, now.Location())
+	}
 }
