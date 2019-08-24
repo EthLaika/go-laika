@@ -54,13 +54,12 @@ type Laika struct {
 	config      *params.LaikaConfig // Consensus engine configuration parameters
 	db          ethdb.Database      // Database to store and retrieve snapshot checkpoints
 	miningLock  sync.Mutex          // Ensures thread safety for the in-memory caches and mining fields
-	threads     int                 // Number of threads to mine on if mining
 	update      chan struct{}       // Notification channel to update mining parameters
 	hashrate    metrics.Meter       // Meter tracking the average hashrate
 	wg          sync.WaitGroup      // Waitgroup of verification threads waiting for the next blocktime
 	result      bestResult          // Best found result for this block period
 	resultGuard sync.RWMutex        // Guard protecting the access to the best Result
-	file     *PlotFile              // The plot file used for mining.
+	file        *PlotFile           // The plot file used for mining.
 }
 
 // New creates a Laika proof-of-capacity consensus engine
@@ -301,53 +300,13 @@ func (l *Laika) FinalizeAndAssemble(chain consensus.ChainReader, header *types.H
 }
 
 func (l *Laika) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	// Create a runner and the multiple search threads it directs
-	abort := make(chan struct{})
-
-	threads := l.threads
-	if threads == 0 {
-		threads = runtime.NumCPU()
-	}
-	if threads < 0 {
-		threads = 0 // Allows disabling local mining without extra logic around local/remote
-	}
-
-	var (
-		pend   sync.WaitGroup
-		locals = make(chan *types.Block)
-	)
-	for i := 0; i < threads; i++ {
-		pend.Add(1)
-		go func(id int) {
-			defer pend.Done()
-			GenProof(block.Header(), l.file.Iterator())
-		}(i)
-	}
-	// Wait until sealing is terminated or a nonce is found
 	go func() {
-		var result *types.Block
-		select {
-		case <-stop:
-			// Outside abort, stop all miner threads
-			close(abort)
-		case result = <-locals:
-			// One of the threads found a block, abort all others
-			select {
-			case results <- result:
-			default:
-				log.Warn("Sealing result is not read by miner", "mode", "local", "sealhash", l.SealHash(block.Header()))
-			}
-			close(abort)
-		case <-l.update:
-			// Thread count was changed on user request, restart
-			close(abort)
-			if err := l.Seal(chain, block, results, stop); err != nil {
-				log.Error("Failed to restart sealing after update", "err", err)
-			}
-		}
-		// Wait for all miners to terminate and return the block
-		pend.Wait()
+		// TODO add ChanIterator for correct column
+		header := block.Header()
+		GenProof(header, nil)
+		results <- block.WithSeal(header)
 	}()
+
 	return nil
 }
 
