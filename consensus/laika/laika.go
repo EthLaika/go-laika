@@ -67,9 +67,9 @@ func New(config *params.LaikaConfig, datasetDir string, db ethdb.Database) *Laik
 	if datasetDir != "" {
 		log.Info("Disk storage enabled for ethash DAGs", "dir", datasetDir)
 	}
-	file := OpenPlotFile(config.PlotFile)
+	file := OpenPlotFile(datasetDir)
 	if file == nil {
-		panic("could not open the plot file '" + config.PlotFile + "'")
+		panic("could not open the plot file '" + datasetDir + "'")
 	}
 	return &Laika{
 		config: config,

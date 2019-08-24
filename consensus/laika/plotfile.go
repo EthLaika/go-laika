@@ -137,7 +137,7 @@ func (f *PlotFile) ReadOneBlock(column int) (cols ColumnBlock, err error) {
 	// Read the witnesses.
 	cols.witnesses = make([]uint32, cols.Length)
 	buf := make([]byte, 4)
-	for i := range cols.chunks {
+	for i := 0; i < int(cols.Length); i++ {
 		if _, err := io.ReadFull(f.file, buf); err != nil {
 			return ColumnBlock{}, errors.New("failed to read the witness")
 		}
