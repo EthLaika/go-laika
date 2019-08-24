@@ -1,6 +1,13 @@
 package laika
 
-import "encoding/binary"
+import (
+	"encoding/binary"
+	"io"
+
+	"golang.org/x/crypto/sha3"
+
+	"github.com/ethereum/go-ethereum/core/types"
+)
 
 func encUint32(x uint32) []byte {
 	buf := make([]byte, 4)
@@ -22,4 +29,22 @@ func checkDifficulty(row []byte) bool {
 	rowhash := digest(row)
 	pivot := binary.BigEndian.Uint32(rowhash[:4])
 	return pivot < D
+}
+
+func headerHash(h types.Header) []byte {
+	digester := sha3.New256()
+	headerEncode(digester, h)
+	return digester.Sum(nil)
+}
+
+func headerEncode(io.Writer, types.Header)
+
+func proofHash(header types.Header, chunk Chunk) []byte {
+	return digest(
+		header.Coinbase[:],
+		headerHash(header),
+		chunk.chunk,
+		encUint64(chunk.idx),
+		encUint32(chunk.nonce),
+	)
 }

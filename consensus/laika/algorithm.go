@@ -1,14 +1,28 @@
 package laika
 
 import (
+	"math/big"
+
 	"golang.org/x/crypto/sha3"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 )
 
 type (
 	Nonce = uint32
-	Chunk = [M]byte
+
+	Chunk struct {
+		chunk []byte
+		idx   uint64
+		nonce Nonce
+	}
+
+	// ChunkIterator iterates over a column
+	ChunkIterator interface {
+		Next() bool
+		Chunk() Chunk
+	}
 )
 
 const (
@@ -31,6 +45,22 @@ const (
 func GenRow(addr common.Address, idx uint64) (row []byte, nonce Nonce) {
 	for ; !checkDifficulty(row); nonce++ {
 		row = Row(addr, idx, nonce)
+	}
+	return
+}
+
+func GenProof(h types.Header, ci ChunkIterator) (best Chunk) {
+	var bestVal *big.Int
+
+	for ci.Next() {
+		c := ci.Chunk()
+		phash := proofHash(h, c)
+		val := new(big.Int).SetBytes(phash)
+
+		if (bestVal != nil && bestVal.Cmp(val) == 1) || bestVal == nil {
+			bestVal = val
+			best = c
+		}
 	}
 	return
 }
