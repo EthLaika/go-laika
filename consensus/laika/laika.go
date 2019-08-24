@@ -18,7 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/params"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"golang.org/x/crypto/sha3"
 )
@@ -54,9 +53,9 @@ type Laika struct {
 }
 
 // New creates a Laika proof-of-capacity consensus engine
-func New(config *params.LaikaConfig, db ethdb.Database) *Laika {
-	if config.DatasetDir != "" {
-		log.Info("Disk storage enabled for ethash DAGs", "dir", config.DatasetDir)
+func New(config *params.LaikaConfig, datasetDir string, db ethdb.Database) *Laika {
+	if datasetDir != "" {
+		log.Info("Disk storage enabled for ethash DAGs", "dir", datasetDir)
 	}
 	return &Laika{
 		config: config,
@@ -270,7 +269,7 @@ func (l *Laika) Seal(chain consensus.ChainReader, block *types.Block, results ch
 		pend.Add(1)
 		go func(id int) {
 			defer pend.Done()
-			l.GenProof(block, id, abort, locals)
+			GenProof(block.Header(), nil)
 		}(i)
 	}
 	// Wait until sealing is terminated or a nonce is found
@@ -304,22 +303,7 @@ func (l *Laika) Seal(chain consensus.ChainReader, block *types.Block, results ch
 // SealHash returns the hash of a block prior to it being sealed.
 func (l *Laika) SealHash(header *types.Header) (hash common.Hash) {
 	hasher := sha3.New256()
-
-	rlp.Encode(hasher, []interface{}{
-		header.ParentHash,
-		header.UncleHash,
-		header.Coinbase,
-		header.Root,
-		header.TxHash,
-		header.ReceiptHash,
-		header.Bloom,
-		header.Difficulty,
-		header.Number,
-		header.GasLimit,
-		header.GasUsed,
-		header.Time,
-		header.Extra,
-	})
+	headerEncode(hasher, header)
 	hasher.Sum(hash[:0])
 	return hash
 }

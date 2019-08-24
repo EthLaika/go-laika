@@ -7,6 +7,7 @@ import (
 	"golang.org/x/crypto/sha3"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/rlp"
 )
 
 func encUint32(x uint32) []byte {
@@ -37,7 +38,25 @@ func headerHash(h *types.Header) []byte {
 	return digester.Sum(nil)
 }
 
-func headerEncode(io.Writer, *types.Header)
+func headerEncode(w io.Writer, header *types.Header) {
+	rlp.Encode(w, []interface{}{
+		header.ParentHash,
+		header.UncleHash,
+		header.Coinbase,
+		header.Root,
+		header.TxHash,
+		header.ReceiptHash,
+		header.Bloom,
+		header.Difficulty,
+		header.Number,
+		header.GasLimit,
+		header.GasUsed,
+		header.Time,
+		header.Extra,
+		header.LaikaChunk,
+		header.LaikaIdx,
+	})
+}
 
 func proofHash(header *types.Header, chunk Chunk) []byte {
 	return digest(
