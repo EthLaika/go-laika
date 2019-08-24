@@ -1,6 +1,9 @@
 package laika
 
 import (
+	"bytes"
+	"encoding/binary"
+	"errors"
 	"math/big"
 
 	"golang.org/x/crypto/sha3"
@@ -42,6 +45,8 @@ const (
 	D uint32 = 0x400000 // 9 leading zeros
 )
 
+var bigN = big.NewInt(N)
+
 func GenRow(addr common.Address, idx uint64) (row []byte, nonce Nonce) {
 	for ; !checkDifficulty(row); nonce++ {
 		row = Row(addr, idx, nonce)
@@ -73,6 +78,22 @@ func GenProof(h *types.Header, ci ChunkIterator) {
 	h.LaikaIdx = best.idx
 	binary.LittleEndian.PutUint32(h.Nonce[:4], best.nonce)
 }
+
+func VrfyProof(h *types.Header) error {
+	proof := chunkFromHeader(h)
+	phash := proofHash(h, proof)
+
+	row := Row(h.Coinbase, proof.idx, proof.nonce)
+	if !checkDifficulty(row) {
+		return errors.New("row does not meet minimum PoW difficulty")
+	}
+
+	col := new(big.Int).Mod(new(big.Int).SetBytes(phash), bigN).Int64()
+	if !bytes.Equal(proof.chunk, row[col*M:(col+1)*M]) {
+		return errors.New("chunk mismatch")
+	}
+
+	return nil
 }
 
 func Row(addr common.Address, idx uint64, nonce Nonce) []byte {
