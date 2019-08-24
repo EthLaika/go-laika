@@ -54,7 +54,7 @@ func (f *PlotFile) reset() {
 // Creates a chunk iterator for a file.
 // Only one chunk iterator per file may exist at a time.
 // The chunk iterator has to be manually destroyed if it is not completely used up.
-func (f *PlotFile) Iterator() (it ChunkIterator) {
+func (f *PlotFile) Iterator(column int) (it ChunkIterator) {
 	// Check for concurrent iterators.
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
@@ -65,6 +65,7 @@ func (f *PlotFile) Iterator() (it ChunkIterator) {
 	f.used = true
 
 	it.file = f
+	it.column = column
 	return
 }
 

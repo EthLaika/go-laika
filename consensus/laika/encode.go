@@ -78,6 +78,6 @@ func chunkFromHeader(h *types.Header) Chunk {
 }
 
 // challengeCol returns the column index for the given header hash
-func challengeCol(hash []byte) int64 {
-	return new(big.Int).Mod(new(big.Int).SetBytes(hash), bigN).Int64()
+func challengeCol(hash []byte) int {
+	return int(new(big.Int).Mod(new(big.Int).SetBytes(hash), bigN).Int64())
 }

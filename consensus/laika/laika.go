@@ -303,7 +303,7 @@ func (l *Laika) Seal(chain consensus.ChainReader, block *types.Block, results ch
 	go func() {
 		// TODO add ChanIterator for correct column
 		header := block.Header()
-		GenProof(header, nil)
+		GenProof(header, l.file.Iterator(challengeCol(headerHash(header))))
 		results <- block.WithSeal(header)
 	}()
 
