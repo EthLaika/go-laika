@@ -338,7 +338,7 @@ type CliqueConfig struct {
 // LaikaConfig is the consensus engine configs for proof-of-capacity based sealing.
 type LaikaConfig struct {
 	Period   uint64 `json:"period"` // Number of seconds between blocks
-	PlotFile string `json:"datasetdir"`
+	PlotFile string `json:"plotfile"`
 	// TODO add config parameters here
 }
 

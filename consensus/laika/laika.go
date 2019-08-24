@@ -167,11 +167,10 @@ func (l *Laika) verifyHeaderWorker(chain consensus.ChainReader, headers []*types
 		return errInvalidPoC
 	}
 
-	//TODO get the difficulty from somewhere
-	difficulty := big.NewInt(0xB0B0FACE)
+	difficulty := new(big.Int).SetBytes(headerHash(headers[index]))
 
 	l.miningLock.Lock()
-	if difficulty.Cmp(l.result.difficulty) == 1 {
+	if l.result.difficulty == nil || difficulty.Cmp(l.result.difficulty) == -1 {
 		l.result.difficulty = difficulty
 		l.result.header = headers[index]
 	}
@@ -191,7 +190,7 @@ func (l *Laika) verifyHeaderWorker(chain consensus.ChainReader, headers []*types
 
 	// reset the best result
 	l.miningLock.Lock()
-	l.result.difficulty = big.NewInt(0)
+	l.result.difficulty = nil
 	l.result.header = nil
 	l.miningLock.Unlock()
 	return nil
@@ -243,10 +242,6 @@ func (l *Laika) verifyHeader(chain consensus.ChainReader, header, parent *types.
 			return err
 		}
 	}
-	// If all checks passed, validate any special fields for hard forks
-	if err := misc.VerifyDAOHeaderExtraData(chain.Config(), header); err != nil {
-		return err
-	}
 	if err := misc.VerifyForkHashes(chain.Config(), header, uncle); err != nil {
 		return err
 	}
@@ -269,7 +264,7 @@ func (l *Laika) VerifySeal(chain consensus.ChainReader, header *types.Header) er
 	if header.Difficulty.Sign() <= 0 {
 		return errInvalidDifficulty
 	}
-	return errors.New("TODO implement")
+	return VrfyProof(header)
 }
 
 // Prepare implements consensus.Engine, initializing the  parent.
