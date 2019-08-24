@@ -84,6 +84,8 @@ type Header struct {
 	Extra       []byte         `json:"extraData"        gencodec:"required"`
 	MixDigest   common.Hash    `json:"mixHash"`
 	Nonce       BlockNonce     `json:"nonce"`
+	LaikaChunk  []byte         `json:"laikaChunk"`
+	LaikaIdx    uint64         `json:"laikaIdx"`
 }
 
 // field type overrides for gencodec
@@ -94,6 +96,8 @@ type headerMarshaling struct {
 	GasUsed    hexutil.Uint64
 	Time       hexutil.Uint64
 	Extra      hexutil.Bytes
+	LaikaChunk hexutil.Bytes
+	LaikaIdx   hexutil.Uint64
 	Hash       common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 
