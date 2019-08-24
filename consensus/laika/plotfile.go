@@ -54,7 +54,7 @@ func (f *PlotFile) reset() {
 // Creates a chunk iterator for a file.
 // Only one chunk iterator per file may exist at a time.
 // The chunk iterator has to be manually destroyed if it is not completely used up.
-func (f *PlotFile) Iterator(column int) (it ChunkIterator) {
+func (f *PlotFile) Iterator(column int) *plotChunkIterator {
 	// Check for concurrent iterators.
 	f.mutex.Lock()
 	defer f.mutex.Unlock()
@@ -64,9 +64,10 @@ func (f *PlotFile) Iterator(column int) (it ChunkIterator) {
 	}
 	f.used = true
 
+	it := new(plotChunkIterator)
 	it.file = f
 	it.column = column
-	return
+	return it
 }
 
 // ReadOneBlock reads all of a block's chunks within the selected column from a plot file.

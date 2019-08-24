@@ -20,6 +20,11 @@ type (
 		idx   uint64
 		nonce Nonce
 	}
+
+	ChunkIterator interface {
+		Next() bool
+		Chunk() Chunk
+	}
 )
 
 const (

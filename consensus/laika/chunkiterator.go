@@ -1,7 +1,7 @@
 package laika
 
-// ChunkIterator iterates over all chunks within one of a plot file's columns.
-type ChunkIterator struct {
+// plotChunkIterator iterates over all chunks within one of a plot file's columns.
+type plotChunkIterator struct {
 	ColumnBlock
 	file   *PlotFile
 	column int
@@ -11,7 +11,7 @@ type ChunkIterator struct {
 // Next retrieves the next chunk to be iterated, if it exists.
 // Returns whether there is a next chunk.
 // When the end of the file is reached, resets the file.
-func (i *ChunkIterator) Next() bool {
+func (i *plotChunkIterator) Next() bool {
 	// Is the iterator's cached data exhausted?
 	if i.index >= int(i.Length) {
 		var err error
@@ -35,7 +35,7 @@ func (i *ChunkIterator) Next() bool {
 
 // Destroys a chunk iterator.
 // Resets the file so that another iterator may be created.
-func (i *ChunkIterator) Destroy() {
+func (i *plotChunkIterator) Destroy() {
 	i.file.mutex.Lock()
 	defer i.file.mutex.Unlock()
 
@@ -49,7 +49,7 @@ func (i *ChunkIterator) Destroy() {
 
 // Chunk retrieves the last chunk retrieved via Next.
 // Next always has to be called before Chunk.
-func (i *ChunkIterator) Chunk() Chunk {
+func (i *plotChunkIterator) Chunk() Chunk {
 	if i.index == 0 || i.index > len(i.witnesses) {
 		panic("illegal iterator access")
 	}
