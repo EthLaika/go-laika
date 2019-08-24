@@ -249,7 +249,7 @@ func CreateConsensusEngine(ctx *node.ServiceContext, chainConfig *params.ChainCo
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
 	} else if chainConfig.Laika != nil {
-		return laika.New(chainConfig.Laika, db)
+		return laika.New(chainConfig.Laika, config.DatasetDir, db)
 	}
 	// Otherwise assume proof-of-work
 	switch config.PowMode {

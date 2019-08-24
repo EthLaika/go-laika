@@ -55,6 +55,9 @@ type Laika struct {
 
 // New creates a Laika proof-of-capacity consensus engine
 func New(config *params.LaikaConfig, db ethdb.Database) *Laika {
+	if config.DatasetDir != "" {
+		log.Info("Disk storage enabled for ethash DAGs", "dir", config.DatasetDir)
+	}
 	return &Laika{
 		config: config,
 		db:     db,
@@ -282,7 +285,7 @@ func (l *Laika) Seal(chain consensus.ChainReader, block *types.Block, results ch
 			select {
 			case results <- result:
 			default:
-				log.Warn("Sealing result is not read by miner", "mode", "local", "sealhash", ethash.SealHash(block.Header()))
+				log.Warn("Sealing result is not read by miner", "mode", "local", "sealhash", l.SealHash(block.Header()))
 			}
 			close(abort)
 		case <-l.update:
