@@ -139,6 +139,7 @@ var (
 		utils.TestnetFlag,
 		utils.RinkebyFlag,
 		utils.GoerliFlag,
+		utils.LaikaFlag,
 		utils.VMEnableDebugFlag,
 		utils.NetworkIdFlag,
 		utils.EthStatsURLFlag,

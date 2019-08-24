@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/consensus"
 	"github.com/ethereum/go-ethereum/consensus/clique"
 	"github.com/ethereum/go-ethereum/consensus/ethash"
+	"github.com/ethereum/go-ethereum/consensus/laika"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/bloombits"
 	"github.com/ethereum/go-ethereum/core/rawdb"
@@ -104,7 +105,7 @@ func (s *Ethereum) AddLesServer(ls LesServer) {
 	ls.SetBloomBitsIndexer(s.bloomIndexer)
 }
 
-// SetClient sets a rpc client which connecting to our local node.
+// SetContractBackend sets a rpc client which connecting to our local node.
 func (s *Ethereum) SetContractBackend(backend bind.ContractBackend) {
 	// Pass the rpc client to les server if it is enabled.
 	if s.lesServer != nil {
@@ -247,6 +248,8 @@ func CreateConsensusEngine(ctx *node.ServiceContext, chainConfig *params.ChainCo
 	// If proof-of-authority is requested, set it up
 	if chainConfig.Clique != nil {
 		return clique.New(chainConfig.Clique, db)
+	} else if chainConfig.Laika != nil {
+		return laika.New(chainConfig.Laika, db)
 	}
 	// Otherwise assume proof-of-work
 	switch config.PowMode {
@@ -465,6 +468,8 @@ func (s *Ethereum) StartMining(threads int) error {
 				return fmt.Errorf("signer missing: %v", err)
 			}
 			clique.Authorize(eb, wallet.SignData)
+		} else if laika, ok := s.engine(*laika.Laika); ok {
+			// TODO Setup miner here
 		}
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.
