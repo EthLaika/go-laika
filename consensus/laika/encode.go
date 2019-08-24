@@ -13,3 +13,13 @@ func encUint64(x uint64) []byte {
 	binary.LittleEndian.PutUint64(buf, x)
 	return buf
 }
+
+func checkDifficulty(row []byte) bool {
+	if row == nil {
+		return false
+	}
+
+	rowhash := digest(row)
+	pivot := binary.BigEndian.Uint32(rowhash[:4])
+	return pivot < D
+}

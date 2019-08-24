@@ -24,11 +24,16 @@ const (
 	// K is the iteration count in a GenRow run
 	K = 4
 
-	// difficultyZeros is the number of required leading zeros for the RowGen
-	// Proof-of-Work
-	// Easier for now than checking against an actual big.Int difficulty
-	difficultyZeros = 10
+	// D is the difficulty for row generation
+	D uint32 = 0x400000 // 9 leading zeros
 )
+
+func GenRow(addr common.Address, idx uint64) (row []byte, nonce Nonce) {
+	for ; !checkDifficulty(row); nonce++ {
+		row = Row(addr, idx, nonce)
+	}
+	return
+}
 
 func Row(addr common.Address, idx uint64, nonce Nonce) []byte {
 	seed := digest(addr.Bytes(), encUint64(idx), encUint32(nonce))
