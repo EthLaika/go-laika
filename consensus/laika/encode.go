@@ -31,15 +31,15 @@ func checkDifficulty(row []byte) bool {
 	return pivot < D
 }
 
-func headerHash(h types.Header) []byte {
+func headerHash(h *types.Header) []byte {
 	digester := sha3.New256()
 	headerEncode(digester, h)
 	return digester.Sum(nil)
 }
 
-func headerEncode(io.Writer, types.Header)
+func headerEncode(io.Writer, *types.Header)
 
-func proofHash(header types.Header, chunk Chunk) []byte {
+func proofHash(header *types.Header, chunk Chunk) []byte {
 	return digest(
 		header.Coinbase[:],
 		headerHash(header),
@@ -47,4 +47,12 @@ func proofHash(header types.Header, chunk Chunk) []byte {
 		encUint64(chunk.idx),
 		encUint32(chunk.nonce),
 	)
+}
+
+func chunkFromHeader(h *types.Header) Chunk {
+	return Chunk{
+		chunk: h.LaikaChunk,
+		idx:   h.LaikaIdx,
+		nonce: binary.LittleEndian.Uint32(h.Nonce[:4]),
+	}
 }

@@ -49,8 +49,13 @@ func GenRow(addr common.Address, idx uint64) (row []byte, nonce Nonce) {
 	return
 }
 
-func GenProof(h types.Header, ci ChunkIterator) (best Chunk) {
-	var bestVal *big.Int
+// GenProof searches for the best chunk and saves it to the header.
+// The chunk iterator is assumed to go over the correct column (header hash % N)
+func GenProof(h *types.Header, ci ChunkIterator) {
+	var (
+		best    Chunk
+		bestVal *big.Int
+	)
 
 	for ci.Next() {
 		c := ci.Chunk()
@@ -62,7 +67,12 @@ func GenProof(h types.Header, ci ChunkIterator) (best Chunk) {
 			best = c
 		}
 	}
-	return
+
+	// write best chunk into header
+	h.LaikaChunk = best.chunk
+	h.LaikaIdx = best.idx
+	binary.LittleEndian.PutUint32(h.Nonce[:4], best.nonce)
+}
 }
 
 func Row(addr common.Address, idx uint64, nonce Nonce) []byte {
