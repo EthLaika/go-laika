@@ -20,12 +20,6 @@ type (
 		idx   uint64
 		nonce Nonce
 	}
-
-	// ChunkIterator iterates over a column
-	ChunkIterator interface {
-		Next() bool
-		Chunk() Chunk
-	}
 )
 
 const (

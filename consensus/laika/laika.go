@@ -60,6 +60,7 @@ type Laika struct {
 	wg          sync.WaitGroup      // Waitgroup of verification threads waiting for the next blocktime
 	result      bestResult          // Best found result for this block period
 	resultGuard sync.RWMutex        // Guard protecting the access to the best Result
+	file     *PlotFile              // The plot file used for mining.
 }
 
 // New creates a Laika proof-of-capacity consensus engine
@@ -67,9 +68,14 @@ func New(config *params.LaikaConfig, datasetDir string, db ethdb.Database) *Laik
 	if datasetDir != "" {
 		log.Info("Disk storage enabled for ethash DAGs", "dir", datasetDir)
 	}
+	file := OpenPlotFile(config.PlotFile)
+	if file == nil {
+		panic("could not open the plot file '" + config.PlotFile + "'")
+	}
 	return &Laika{
 		config: config,
 		db:     db,
+		file:   file,
 	}
 }
 
@@ -314,7 +320,7 @@ func (l *Laika) Seal(chain consensus.ChainReader, block *types.Block, results ch
 		pend.Add(1)
 		go func(id int) {
 			defer pend.Done()
-			GenProof(block.Header(), nil)
+			GenProof(block.Header(), l.file.Iterator())
 		}(i)
 	}
 	// Wait until sealing is terminated or a nonce is found
