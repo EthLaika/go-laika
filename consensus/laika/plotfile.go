@@ -3,17 +3,20 @@ package laika
 import (
 	"encoding/binary"
 	"io"
+	"log"
 	"os"
 	"sync"
 
 	"github.com/pkg/errors"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 // PlotFile is a handle to a laika plot file.
 // It is used to mine and to plot.
 type PlotFile struct {
 	file       *os.File
-	parameters Parameters
+	Parameters Parameters
 	mutex      sync.Mutex
 	used       bool
 }
@@ -28,18 +31,56 @@ type ColumnBlock struct {
 func OpenPlotFile(file string) *PlotFile {
 	handle, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_RDWR, os.ModePerm)
 	if err != nil {
+		println("Could not open:", err)
 		return nil
 	}
 	f := &PlotFile{
 		file: handle,
 	}
 
-	if err := f.parameters.ReadFromFile(f.file); err != nil || !f.parameters.Check() {
+	if err := f.Parameters.ReadFromFile(f.file); err != nil || !f.Parameters.Check() {
+		println("Could not read parameters:", err)
 		handle.Close()
 		return nil
 	}
 
 	return f
+}
+
+func CreatePlotFile(file string, address common.Address) *PlotFile {
+	handle, err := os.Create(file)
+	if err != nil {
+		log.Println("Failed to Create file: ", err)
+		return nil
+	}
+
+	p := Parameters{
+		Address: address,
+		M:       M,
+		N:       N,
+		K:       K,
+		D:       D,
+	}
+
+	if err = p.WriteToFile(handle); err != nil {
+		log.Println("Could not write parameters: ", err)
+		handle.Close()
+		return nil
+	}
+
+	handle.Close()
+
+	return OpenPlotFile(file)
+}
+
+func OpenOrCreatePlotFile(file string, address common.Address) *PlotFile {
+	p := OpenPlotFile(file)
+	if p == nil {
+		log.Println("Failed Open, creating!")
+		p = CreatePlotFile(file, address)
+	}
+
+	return p
 }
 
 func (f *PlotFile) Close() error {
@@ -78,19 +119,19 @@ func (f *PlotFile) ReadOneBlock(column int) (cols ColumnBlock, err error) {
 	}
 
 	// Skip the first columns.
-	f.file.Seek(int64(column)*int64(f.parameters.M)*int64(cols.Length), 1)
+	f.file.Seek(int64(column)*int64(f.Parameters.M)*int64(cols.Length), 1)
 
 	// Read the chunks.
-	cols.chunks = make([]byte, int(f.parameters.M)*int(cols.Length))
+	cols.chunks = make([]byte, int(f.Parameters.M)*int(cols.Length))
 	if _, err := io.ReadFull(f.file, cols.chunks); err != nil {
 		return ColumnBlock{}, errors.Wrap(err, "failed to read the chunks")
 	}
 
 	// Seek to the witnesses.
 	f.file.Seek(
-		int64(f.parameters.M)*
+		int64(f.Parameters.M)*
 			int64(cols.Length)*
-			(int64(f.parameters.N)-int64(column)),
+			(int64(f.Parameters.N)-int64(column)),
 		1)
 
 	// Read the witnesses.
@@ -104,6 +145,10 @@ func (f *PlotFile) ReadOneBlock(column int) (cols ColumnBlock, err error) {
 	}
 
 	return
+}
+
+func (f *PlotFile) WriteParameters() error {
+	return f.Parameters.WriteToFile(f.file)
 }
 
 // Plots one block at the end of the plot file.
