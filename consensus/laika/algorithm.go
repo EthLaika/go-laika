@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
+	"log"
 	"math/big"
 
 	"golang.org/x/crypto/sha3"
@@ -47,9 +49,13 @@ const (
 var bigN = big.NewInt(N)
 
 func GenRow(addr common.Address, idx uint64) (row []byte, nonce Nonce) {
-	for ; !checkDifficulty(row); nonce++ {
+	for ; ; nonce++ {
 		row = Row(addr, idx, nonce)
+		if checkDifficulty(row) {
+			break
+		}
 	}
+	log.Printf("Found row %d, nonce %d", idx, nonce)
 	return
 }
 
@@ -80,16 +86,17 @@ func GenProof(h *types.Header, ci ChunkIterator) {
 
 func VrfyProof(h *types.Header) error {
 	proof := chunkFromHeader(h)
-	phash := proofHash(h, proof)
+	hhash := headerHash(h)
 
 	row := Row(h.Coinbase, proof.idx, proof.nonce)
 	if !checkDifficulty(row) {
 		return errors.New("row does not meet minimum PoW difficulty")
 	}
 
-	col := challengeCol(phash)
-	if !bytes.Equal(proof.chunk, row[col*M:(col+1)*M]) {
-		return errors.New("chunk mismatch")
+	col := challengeCol(hhash)
+	chunk := row[col*M : (col+1)*M]
+	if !bytes.Equal(proof.chunk, chunk) {
+		return fmt.Errorf("chunk mismatch; col: %d, proof: %v, chunk: %v", col, proof.chunk, chunk)
 	}
 
 	return nil

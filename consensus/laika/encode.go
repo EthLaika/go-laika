@@ -54,8 +54,6 @@ func headerEncode(w io.Writer, header *types.Header) {
 		header.GasUsed,
 		header.Time,
 		header.Extra,
-		header.LaikaChunk,
-		header.LaikaIdx,
 	})
 }
 
