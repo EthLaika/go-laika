@@ -300,7 +300,7 @@ func (l *Laika) Seal(chain consensus.ChainReader, block *types.Block, results ch
 
 // SealHash returns the hash of a block prior to it being sealed.
 func (l *Laika) SealHash(header *types.Header) (hash common.Hash) {
-	hasher := sha3.NewLegacyKeccak256()
+	hasher := sha3.New256()
 
 	rlp.Encode(hasher, []interface{}{
 		header.ParentHash,
@@ -331,9 +331,14 @@ func (l *Laika) APIs(chain consensus.ChainReader) []rpc.API {
 	return []rpc.API{{
 		Namespace: "laika",
 		Version:   "1.0",
-		Service:   &API{chain: chain, laika: l},
+		Service:   &API{laika: l},
 		Public:    false,
 	}}
+}
+
+// Hashrate returns the hashrate of the current miner
+func (l *Laika) Hashrate() uint64 {
+	return 0xB0B0
 }
 
 // Close implements consensus.Engine.
