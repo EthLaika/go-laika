@@ -88,7 +88,7 @@ func VrfyProof(h *types.Header) error {
 		return errors.New("row does not meet minimum PoW difficulty")
 	}
 
-	col := new(big.Int).Mod(new(big.Int).SetBytes(phash), bigN).Int64()
+	col := challengeCol(phash)
 	if !bytes.Equal(proof.chunk, row[col*M:(col+1)*M]) {
 		return errors.New("chunk mismatch")
 	}

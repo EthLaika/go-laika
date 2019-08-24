@@ -3,6 +3,7 @@ package laika
 import (
 	"encoding/binary"
 	"io"
+	"math/big"
 
 	"golang.org/x/crypto/sha3"
 
@@ -74,4 +75,9 @@ func chunkFromHeader(h *types.Header) Chunk {
 		idx:   h.LaikaIdx,
 		nonce: binary.LittleEndian.Uint32(h.Nonce[:4]),
 	}
+}
+
+// challengeCol returns the column index for the given header hash
+func challengeCol(hash []byte) int64 {
+	return new(big.Int).Mod(new(big.Int).SetBytes(hash), bigN).Int64()
 }
