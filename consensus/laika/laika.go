@@ -192,7 +192,7 @@ func (l *Laika) verifyHeaderWorker(chain consensus.ChainReader, headers []*types
 	l.miningLock.Unlock()
 
 	blockNum := header.Number.Uint64()
-	log.Debug("[verifyHeaderWorker] waiting for tick, header #", blockNum)
+	log.Debug("[verifyHeaderWorker] waiting for tick", "blockNum", blockNum)
 	select {
 	case <-l.veriSync[blockNum]:
 	case <-l.quit:
@@ -362,7 +362,7 @@ func (l *Laika) Close() error {
 func (l *Laika) metronome() {
 	// we start a ticker on the next full multiple of a period in this minute
 	tickerStart := nextFullMultiple(l.config.Period)
-	log.Debug("[metronome] Starting ticker on", tickerStart)
+	log.Debug("[metronome] Starting ticker on", "ts", tickerStart)
 	time.Sleep(time.Until(tickerStart))
 
 	ticker := time.NewTicker(time.Duration(l.config.Period) * time.Second)
@@ -370,11 +370,11 @@ func (l *Laika) metronome() {
 
 	for h := range l.newHeader {
 		blockNum := h.Number.Uint64()
-		log.Debug("[metronome] Received new header #", blockNum)
+		log.Debug("[metronome] Received new header #", "blockNum", blockNum)
 		l.veriSync[blockNum] = make(chan struct{})
 		select {
 		case <-ticker.C:
-			log.Debug("[metronome] Tick for header #", blockNum)
+			log.Debug("[metronome] Tick for header #", "blockNum", blockNum)
 		case <-l.quit:
 			return
 		}
