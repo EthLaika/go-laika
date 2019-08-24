@@ -647,12 +647,12 @@ func (f *Fetcher) insert(peer string, block *types.Block) {
 			log.Debug("Unknown parent of propagated block", "peer", peer, "number", block.Number(), "hash", hash, "parent", block.ParentHash())
 			return
 		}
+		// Fast-forward block to peers
+		propBroadcastOutTimer.UpdateSince(block.ReceivedAt)
+		go f.broadcastBlock(block, true)
 		// Quickly validate the header and propagate the block if it passes
 		switch err := f.verifyHeader(block.Header()); err {
 		case nil:
-			// All ok, quickly propagate to our peers
-			propBroadcastOutTimer.UpdateSince(block.ReceivedAt)
-			go f.broadcastBlock(block, true)
 
 		case consensus.ErrFutureBlock:
 			// Weird future block, don't fail, but neither propagate

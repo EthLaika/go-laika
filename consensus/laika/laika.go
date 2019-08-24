@@ -33,6 +33,8 @@ var (
 	errZeroBlockTime = errors.New("timestamp equals parent's")
 	// errInvalidDifficulty is thrown if someone provides a difficulty < 0
 	errInvalidDifficulty = errors.New("invalid difficulty")
+	// errHigherDifficultyFound is thrown if we received a block with higher difficulty until blocktime
+	errHigherDifficultyFound = errors.New("higher difficulty found")
 )
 
 var (
@@ -42,14 +44,23 @@ var (
 	blockReward = big.NewInt(2e+18)
 )
 
+type bestResult struct {
+	difficulty *big.Int      // achieved difficulty of the best result
+	header     *types.Header // pointer to the best result
+}
+
 // Laika is the proof-of-capacity consensus engine for the Ethereum Laika testnet.
 type Laika struct {
-	config   *params.LaikaConfig // Consensus engine configuration parameters
-	db       ethdb.Database      // Database to store and retrieve snapshot checkpoints
-	lock     sync.Mutex          // Ensures thread safety for the in-memory caches and mining fields
-	threads  int                 // Number of threads to mine on if mining
-	update   chan struct{}       // Notification channel to update mining parameters
-	hashrate metrics.Meter       // Meter tracking the average hashrate
+	config      *params.LaikaConfig // Consensus engine configuration parameters
+	db          ethdb.Database      // Database to store and retrieve snapshot checkpoints
+	miningLock  sync.Mutex          // Ensures thread safety for the in-memory caches and mining fields
+	threads     int                 // Number of threads to mine on if mining
+	update      chan struct{}       // Notification channel to update mining parameters
+	hashrate    metrics.Meter       // Meter tracking the average hashrate
+	wg          sync.WaitGroup      // Waitgroup of verification threads waiting for the next blocktime
+	result      bestResult          // Best found result for this block period
+	resultGuard sync.RWMutex        // Guard protecting the access to the best Result
+	file     *PlotFile              // The plot file used for mining.
 }
 
 // New creates a Laika proof-of-capacity consensus engine
@@ -57,9 +68,14 @@ func New(config *params.LaikaConfig, datasetDir string, db ethdb.Database) *Laik
 	if datasetDir != "" {
 		log.Info("Disk storage enabled for ethash DAGs", "dir", datasetDir)
 	}
+	file := OpenPlotFile(config.PlotFile)
+	if file == nil {
+		panic("could not open the plot file '" + config.PlotFile + "'")
+	}
 	return &Laika{
 		config: config,
 		db:     db,
+		file:   file,
 	}
 }
 
@@ -132,6 +148,9 @@ func (l *Laika) VerifyHeaders(chain consensus.ChainReader, headers []*types.Head
 }
 
 func (l *Laika) verifyHeaderWorker(chain consensus.ChainReader, headers []*types.Header, seals []bool, index int) error {
+	l.wg.Add(1)
+	defer l.wg.Done()
+
 	var parent *types.Header
 	if index == 0 {
 		parent = chain.GetHeader(headers[0].ParentHash, headers[0].Number.Uint64()-1)
@@ -144,7 +163,39 @@ func (l *Laika) verifyHeaderWorker(chain consensus.ChainReader, headers []*types
 	if chain.GetHeader(headers[index].Hash(), headers[index].Number.Uint64()) != nil {
 		return nil // known block
 	}
-	return errors.New("TODO implement")
+
+	if l.verifyHeader(chain, headers[index], parent, false, seals[index]) != nil {
+		return errInvalidPoC
+	}
+
+	//TODO get the difficulty from somewhere
+	difficulty := big.NewInt(0xB0B0FACE)
+
+	l.miningLock.Lock()
+	if difficulty.Cmp(l.result.difficulty) == 1 {
+		l.result.difficulty = difficulty
+		l.result.header = headers[index]
+	}
+	l.miningLock.Unlock()
+
+	// wait for next blocktime
+	blocktime := headers[index].Time + l.config.Period
+	timeToRest := uint64(time.Now().Unix()) - blocktime
+	timer := time.NewTimer(time.Duration(timeToRest) * time.Second)
+	defer timer.Stop()
+	_ = <-timer.C
+
+	// Unlikely to receive two blocks with the same difficulty
+	if l.result.difficulty != difficulty {
+		return errHigherDifficultyFound
+	}
+
+	// reset the best result
+	l.miningLock.Lock()
+	l.result.difficulty = big.NewInt(0)
+	l.result.header = nil
+	l.miningLock.Unlock()
+	return nil
 }
 
 // verifyHeader checks whether a header conforms to the consensus rules
@@ -269,7 +320,7 @@ func (l *Laika) Seal(chain consensus.ChainReader, block *types.Block, results ch
 		pend.Add(1)
 		go func(id int) {
 			defer pend.Done()
-			GenProof(block.Header(), nil)
+			GenProof(block.Header(), l.file.Iterator())
 		}(i)
 	}
 	// Wait until sealing is terminated or a nonce is found
