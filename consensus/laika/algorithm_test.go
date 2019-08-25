@@ -46,7 +46,7 @@ func TestGenProofVrfy(t *testing.T) {
 	}
 
 	ci := &memChunkIt{
-		col:    challengeCol(headerHash(header)),
+		col:    ChallengeCol(headerHash(header)),
 		rows:   rows,
 		nonces: nonces,
 	}

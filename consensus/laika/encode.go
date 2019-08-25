@@ -75,7 +75,11 @@ func chunkFromHeader(h *types.Header) Chunk {
 	}
 }
 
+func ProofHash(header *types.Header) []byte {
+	return proofHash(header, chunkFromHeader(header))
+}
+
 // challengeCol returns the column index for the given header hash
-func challengeCol(hash []byte) int {
+func ChallengeCol(hash []byte) int {
 	return int(new(big.Int).Mod(new(big.Int).SetBytes(hash), bigN).Int64())
 }

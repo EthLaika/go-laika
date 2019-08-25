@@ -316,7 +316,7 @@ func (l *Laika) Seal(chain consensus.ChainReader, block *types.Block, results ch
 	go func() {
 		log.Debug("[Seal] Start sealing block...", "blockNum", block.NumberU64())
 		header := block.Header()
-		GenProof(header, l.file.Iterator(challengeCol(headerHash(header))))
+		GenProof(header, l.file.Iterator(ChallengeCol(headerHash(header))))
 		log.Debug("[Seal] sealed block", "blockNum", header.Number.Uint64())
 		results <- block.WithSeal(header)
 	}()
