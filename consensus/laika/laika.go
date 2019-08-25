@@ -391,6 +391,8 @@ func (l *Laika) metronome() {
 		// Calculate the hash rate (HashMax/Hash)
 		hash := new(big.Int).SetBytes(proofHash(h, chunkFromHeader(h)))
 		hash.Div(u256, hash)
+		// Multiply hash rate with block time to get the capacity.
+		hash.Mul(hash, new(big.Int).SetUint64(l.config.Period))
 
 		if hash.IsInt64() {
 			l.hashrate.Mark(hash.Int64())
