@@ -21,7 +21,7 @@ func (i *plotChunkIterator) Next() bool {
 		} else {
 			i.index = 1
 			if i.Length != 0 {
-				return false
+				return true
 			} else {
 				i.Destroy()
 				return false
@@ -50,13 +50,13 @@ func (i *plotChunkIterator) Destroy() {
 // Chunk retrieves the last chunk retrieved via Next.
 // Next always has to be called before Chunk.
 func (i *plotChunkIterator) Chunk() Chunk {
-	if i.index == 0 || i.index >= len(i.witnesses) {
+	if i.index == 0 || i.index > len(i.witnesses) {
 		panic("illegal iterator access")
 	}
 
 	return Chunk{
 		chunk: i.chunks[(i.index-1)*M : i.index*M],
-		idx:   i.Start + uint64(i.index),
-		nonce: i.witnesses[i.index],
+		idx:   i.Start + uint64(i.index-1),
+		nonce: i.witnesses[i.index-1],
 	}
 }
