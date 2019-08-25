@@ -382,24 +382,6 @@ func (l *Laika) metronome() {
 		// signal to all verifyHeaderWorkers that proof generation period is done
 		// for this block
 		close(l.veriSync[blockNum])
-		delete(l.veriSync, blockNum)
-
-		// Calculate u256max
-		u256 := new(big.Int)
-		u256.SetBit(u256, 256, 1)
-		u256.Sub(u256, big.NewInt(1))
-
-		// Calculate the hash rate (HashMax/Hash)
-		hash := new(big.Int).SetBytes(proofHash(h, chunkFromHeader(h)))
-		hash.Div(u256, hash)
-		// Multiply hash rate with block time to get the capacity.
-		hash.Mul(hash, new(big.Int).SetUint64(l.config.Period))
-
-		if hash.IsInt64() {
-			l.hashrate.Mark(hash.Int64())
-		} else {
-			l.hashrate.Mark(0x7fffffffffffffff)
-		}
 	}
 }
 
