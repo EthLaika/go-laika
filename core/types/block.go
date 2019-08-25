@@ -101,8 +101,25 @@ type headerMarshaling struct {
 
 // Hash returns the block hash of the header, which is simply the keccak256 hash of its
 // RLP encoding.
-func (h *Header) Hash() common.Hash {
-	return rlpHash(h)
+func (header *Header) Hash() (hash common.Hash) {
+	hasher := sha3.New256()
+	rlp.Encode(hasher, []interface{}{
+		header.ParentHash,
+		header.UncleHash,
+		header.Coinbase,
+		header.Root,
+		header.TxHash,
+		header.ReceiptHash,
+		header.Bloom,
+		header.Difficulty,
+		header.Number,
+		header.GasLimit,
+		header.GasUsed,
+		header.Time,
+		header.Extra,
+	})
+	hasher.Sum(hash[:0])
+	return hash
 }
 
 var headerSize = common.StorageSize(reflect.TypeOf(Header{}).Size())
