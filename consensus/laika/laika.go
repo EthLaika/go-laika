@@ -347,8 +347,8 @@ func (l *Laika) APIs(chain consensus.ChainReader) []rpc.API {
 }
 
 // Hashrate returns the hashrate of the current miner
-func (l *Laika) Hashrate() uint64 {
-	return 0xB0B0
+func (l *Laika) Hashrate() float64 {
+	return l.hashrate.Rate1()
 }
 
 // Close implements consensus.Engine.
@@ -382,6 +382,21 @@ func (l *Laika) metronome() {
 		// for this block
 		close(l.veriSync[blockNum])
 		delete(l.veriSync, blockNum)
+
+		// Calculate u256max
+		u256 := new(big.Int)
+		u256.SetBit(u256, 256, 1)
+		u256.Sub(u256, big.NewInt(1))
+
+		// Calculate the hash rate (HashMax/Hash)
+		hash := new(big.Int).SetBytes(proofHash(h, chunkFromHeader(h)))
+		hash.Div(u256, hash)
+
+		if hash.IsInt64() {
+			l.hashrate.Mark(hash.Int64())
+		} else {
+			l.hashrate.Mark(0x7fffffffffffffff)
+		}
 	}
 }
 
