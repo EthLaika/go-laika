@@ -314,9 +314,10 @@ func (l *Laika) FinalizeAndAssemble(chain consensus.ChainReader, header *types.H
 
 func (l *Laika) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 	go func() {
-		// TODO add ChanIterator for correct column
+		log.Debug("[Seal] Start sealing block...", "blockNum", block.NumberU64())
 		header := block.Header()
 		GenProof(header, l.file.Iterator(challengeCol(headerHash(header))))
+		log.Debug("[Seal] sealed block", "blockNum", header.Number.Uint64())
 		results <- block.WithSeal(header)
 	}()
 
