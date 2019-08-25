@@ -96,8 +96,6 @@ type headerMarshaling struct {
 	GasUsed    hexutil.Uint64
 	Time       hexutil.Uint64
 	Extra      hexutil.Bytes
-	LaikaChunk hexutil.Bytes
-	LaikaIdx   hexutil.Uint64
 	Hash       common.Hash `json:"hash"` // adds call to Hash() in MarshalJSON
 }
 

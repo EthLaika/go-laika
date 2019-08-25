@@ -223,7 +223,8 @@ var (
 		PetersburgBlock:     big.NewInt(0),
 		IstanbulBlock:       nil,
 		Laika: &LaikaConfig{
-			Period: 15,
+			Period:   15,
+			PlotFile: "BOBO",
 		},
 	}
 

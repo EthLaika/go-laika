@@ -11,7 +11,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/consensus"
-	"github.com/ethereum/go-ethereum/consensus/misc"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethdb"
@@ -65,10 +64,12 @@ type Laika struct {
 	newHeader   chan *types.Header       // communicates to the metronome a new header on which mining has started
 	veriSync    map[uint64]chan struct{} // synchronizes calls to VerifyHeader per block number
 	quit        chan struct{}            // quits running routines like metronome
+	coinbase    common.Address           // coinbase address used for mining the blocks
 }
 
 // New creates a Laika proof-of-capacity consensus engine
 func New(config *params.LaikaConfig, datasetDir string, db ethdb.Database) *Laika {
+	log.Trace("New Laika")
 	if datasetDir != "" {
 		log.Info("Disk storage enabled for ethash DAGs", "dir", datasetDir)
 	}
@@ -93,11 +94,13 @@ func New(config *params.LaikaConfig, datasetDir string, db ethdb.Database) *Laik
 // Author implements consensus.Engine, returning the Ethereum address recovered
 // from the signature in the header's extra-data section.
 func (l *Laika) Author(header *types.Header) (common.Address, error) {
+	log.Trace("Author")
 	return header.Coinbase, nil
 }
 
 // VerifyHeader checks whether a header conforms to the consensus rules.
 func (l *Laika) VerifyHeader(chain consensus.ChainReader, header *types.Header, seal bool) error {
+	log.Trace("VerifyHeader")
 	return l.verifyHeaderWorker(chain, []*types.Header{header}, []bool{false}, 0)
 }
 
@@ -105,9 +108,9 @@ func (l *Laika) VerifyHeader(chain consensus.ChainReader, header *types.Header, 
 // concurrently. The method returns a quit channel to abort the operations and
 // a results channel to retrieve the async verifications.
 func (l *Laika) VerifyHeaders(chain consensus.ChainReader, headers []*types.Header, seals []bool) (chan<- struct{}, <-chan error) {
-
+	log.Trace("VerifyHeaders")
 	// Spawn as many workers as allowed threads
-	workers := runtime.GOMAXPROCS(0)
+	workers := runtime.GOMAXPROCS(1)
 	if len(headers) < workers {
 		workers = len(headers)
 	}
@@ -159,9 +162,7 @@ func (l *Laika) VerifyHeaders(chain consensus.ChainReader, headers []*types.Head
 }
 
 func (l *Laika) verifyHeaderWorker(chain consensus.ChainReader, headers []*types.Header, seals []bool, index int) error {
-	l.wg.Add(1)
-	defer l.wg.Done()
-
+	log.Trace("verifyHeaderWorker")
 	var parent *types.Header
 	header := headers[index]
 	if index == 0 {
@@ -175,7 +176,7 @@ func (l *Laika) verifyHeaderWorker(chain consensus.ChainReader, headers []*types
 	if chain.GetHeader(header.Hash(), header.Number.Uint64()) != nil {
 		return nil // known block
 	}
-
+	log.Debug("tickticktick")
 	if l.verifyHeader(chain, header, parent, false, seals[index]) != nil {
 		return errInvalidPoC
 	}
@@ -183,7 +184,7 @@ func (l *Laika) verifyHeaderWorker(chain consensus.ChainReader, headers []*types
 	// header passed the verification, we'll check it against all other current
 	// checks and wait
 	difficulty := new(big.Int).SetBytes(headerHash(header))
-
+	log.Debug("tocktocktock")
 	l.miningLock.Lock()
 	if l.result.difficulty == nil || difficulty.Cmp(l.result.difficulty) == -1 {
 		l.result.difficulty = difficulty
@@ -214,6 +215,7 @@ func (l *Laika) verifyHeaderWorker(chain consensus.ChainReader, headers []*types
 
 // verifyHeader checks whether a header conforms to the consensus rules
 func (l *Laika) verifyHeader(chain consensus.ChainReader, header, parent *types.Header, uncle bool, seal bool) error {
+	log.Trace("verifyHeader")
 	// Ensure that the header's extra-data section is of a reasonable size
 	if uint64(len(header.Extra)) > params.MaximumExtraDataSize {
 		return fmt.Errorf("extra-data too long: %d > %d", len(header.Extra), params.MaximumExtraDataSize)
@@ -258,15 +260,13 @@ func (l *Laika) verifyHeader(chain consensus.ChainReader, header, parent *types.
 			return err
 		}
 	}
-	if err := misc.VerifyForkHashes(chain.Config(), header, uncle); err != nil {
-		return err
-	}
 	return nil
 }
 
 // VerifyUncles implements consensus.Engine, always returning an error for any
 // uncles as this consensus mechanism does not permit uncles.
 func (l *Laika) VerifyUncles(chain consensus.ChainReader, block *types.Block) error {
+	log.Trace("VerifyUncles")
 	if len(block.Uncles()) > 0 {
 		return errors.New("uncles not allowed")
 	}
@@ -276,6 +276,7 @@ func (l *Laika) VerifyUncles(chain consensus.ChainReader, block *types.Block) er
 // VerifySeal implements consensus.Engine, checking whether the given block satisfies
 // the PoW difficulty requirements.
 func (l *Laika) VerifySeal(chain consensus.ChainReader, header *types.Header) error {
+	log.Trace("VerifySeal")
 	// Ensure that we have a valid difficulty for the block
 	if header.Difficulty.Sign() <= 0 {
 		return errInvalidDifficulty
@@ -285,11 +286,13 @@ func (l *Laika) VerifySeal(chain consensus.ChainReader, header *types.Header) er
 
 // Prepare implements consensus.Engine, initializing the  parent.
 func (l *Laika) Prepare(chain consensus.ChainReader, header *types.Header) error {
+	log.Trace("Prepare")
 	parent := chain.GetHeader(header.ParentHash, header.Number.Uint64()-1)
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-
+	header.Coinbase = l.coinbase
+	header.Time = big.NewInt(time.Now().Unix()).Uint64()
 	l.newHeader <- header
 	return nil
 }
@@ -297,6 +300,7 @@ func (l *Laika) Prepare(chain consensus.ChainReader, header *types.Header) error
 // Finalize implements consensus.Engine, accumulating the block and uncle rewards,
 // setting the final state on the header
 func (l *Laika) Finalize(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header) {
+	log.Trace("Finalize")
 	// Accumulate any block and uncle rewards and commit the final state root
 	state.AddBalance(header.Coinbase, blockReward)
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
@@ -305,20 +309,25 @@ func (l *Laika) Finalize(chain consensus.ChainReader, header *types.Header, stat
 // FinalizeAndAssemble implements consensus.Engine, accumulating the block and
 // uncle rewards, setting the final state and assembling the block.
 func (l *Laika) FinalizeAndAssemble(chain consensus.ChainReader, header *types.Header, state *state.StateDB, txs []*types.Transaction, uncles []*types.Header, receipts []*types.Receipt) (*types.Block, error) {
+	log.Trace("FinalizeAndAssemble")
 	// Accumulate any block and uncle rewards and commit the final state root
 	header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	state.AddBalance(header.Coinbase, blockReward)
+	header.UncleHash = types.CalcUncleHash(nil)
 	// Header seems complete, assemble into a block and return
-	return types.NewBlock(header, txs, uncles, receipts), nil
+	return types.NewBlock(header, txs, nil, receipts), nil
 }
 
 func (l *Laika) Seal(chain consensus.ChainReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+
+	log.Trace("Seal")
 	go func() {
 		log.Debug("[Seal] Start sealing block...", "blockNum", block.NumberU64())
 		header := block.Header()
 		GenProof(header, l.file.Iterator(ChallengeCol(headerHash(header))))
 		log.Debug("[Seal] sealed block", "blockNum", header.Number.Uint64())
 		results <- block.WithSeal(header)
+		log.Trace("Seal finished")
 	}()
 
 	return nil
@@ -326,6 +335,7 @@ func (l *Laika) Seal(chain consensus.ChainReader, block *types.Block, results ch
 
 // SealHash returns the hash of a block prior to it being sealed.
 func (l *Laika) SealHash(header *types.Header) (hash common.Hash) {
+	log.Trace("SealHash")
 	hasher := sha3.New256()
 	headerEncode(hasher, header)
 	hasher.Sum(hash[:0])
@@ -354,13 +364,22 @@ func (l *Laika) Hashrate() float64 {
 
 // Close implements consensus.Engine.
 func (l *Laika) Close() error {
+	log.Trace("Close")
 	close(l.quit)
 	close(l.newHeader) // Prepare() should not be called after a call to Close()
 	return nil
 }
 
+// Authorize injects a private key into the consensus engine to mine new blocks
+// with.
+func (l *Laika) Authorize(signer common.Address) {
+	log.Info("Authorized new coinbase address")
+	l.coinbase = signer
+}
+
 // The metronome is a go routine that sends
 func (l *Laika) metronome() {
+	log.Trace("metronome")
 	// we start a ticker on the next full multiple of a period in this minute
 	tickerStart := nextFullMultiple(l.config.Period)
 	log.Debug("[metronome] Starting ticker on", "ts", tickerStart)
@@ -382,6 +401,24 @@ func (l *Laika) metronome() {
 		// signal to all verifyHeaderWorkers that proof generation period is done
 		// for this block
 		close(l.veriSync[blockNum])
+		delete(l.veriSync, blockNum)
+
+		// Calculate u256max
+		u256 := new(big.Int)
+		u256.SetBit(u256, 256, 1)
+		u256.Sub(u256, big.NewInt(1))
+
+		// Calculate the hash rate (HashMax/Hash)
+		hash := new(big.Int).SetBytes(proofHash(h, chunkFromHeader(h)))
+		hash.Div(u256, hash)
+		// Multiply hash rate with block time to get the capacity.
+		hash.Mul(hash, new(big.Int).SetUint64(l.config.Period))
+		/*
+			if hash.IsInt64() {
+				l.hashrate.Mark(hash.Int64())
+			} else {
+				l.hashrate.Mark(0x7fffffffffffffff)
+			}*/
 	}
 }
 

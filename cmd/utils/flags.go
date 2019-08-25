@@ -1506,7 +1506,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 		cfg.Genesis = core.DefaultGoerliGenesisBlock()
 	case ctx.GlobalBool(LaikaFlag.Name):
 		if !ctx.GlobalIsSet(NetworkIdFlag.Name) {
-			cfg.NetworkId = 0xB0B0
+			cfg.NetworkId = 45232
 		}
 		cfg.Genesis = core.DefaultLaikaGenesisBlock()
 	case ctx.GlobalBool(DeveloperFlag.Name):

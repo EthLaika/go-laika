@@ -276,6 +276,10 @@ func (g *Genesis) ToBlock(db ethdb.Database) *types.Block {
 		Coinbase:   g.Coinbase,
 		Root:       root,
 	}
+	if g.Config.Laika != nil {
+		head.LaikaChunk = nil
+		head.LaikaIdx = 0
+	}
 	if g.GasLimit == 0 {
 		head.GasLimit = params.GenesisGasLimit
 	}

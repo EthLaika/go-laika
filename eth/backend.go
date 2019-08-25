@@ -468,8 +468,8 @@ func (s *Ethereum) StartMining(threads int) error {
 				return fmt.Errorf("signer missing: %v", err)
 			}
 			clique.Authorize(eb, wallet.SignData)
-		} else if _, ok := s.engine.(*laika.Laika); ok {
-			// TODO Setup miner here
+		} else if laika, ok := s.engine.(*laika.Laika); ok {
+			laika.Authorize(eb)
 		}
 		// If mining is started, we can disable the transaction rejection mechanism
 		// introduced to speed sync times.
